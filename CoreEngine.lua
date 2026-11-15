@@ -1,4 +1,4 @@
-local P, R, T, S = game:GetService("Players"), game:GetService("ReplicatedStorage"), game:GetService("TweenService"), game:GetService("RunService")
+local P, R = game:GetService("Players"), game:GetService("ReplicatedStorage")
 local L = P.LocalPlayer
 local A = R:WaitForChild("Remotes"):WaitForChild("Validator", 10)
 
@@ -16,9 +16,11 @@ return {
                     local hrp = ch.HumanoidRootPart
                     local hum = ch:FindFirstChild("Humanoid")
 
+                    if not ch:FindFirstChild("Buso") then game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("CommF_"):InvokeServer("Buso") end
+
                     if bp and not ch:FindFirstChildOfClass("Tool") then
                         for _, tp in pairs(bp:GetChildren()) do
-                            if tp:IsA("Tool") and (tp.ToolTip == "Melee" or tp.ToolTip == "Sword" or tp.ToolTip == "Blox Fruit") then
+                            if tp:IsA("Tool") and (tp.ToolTip == "Melee" or tp.ToolTip == "Sword") then
                                 hum:EquipTool(tp)
                                 break
                             end
@@ -59,21 +61,9 @@ return {
         end)
 
         pcall(function()
-            if AutoLevelModule and type(AutoLevelModule.Run) == "function" then
-                AutoLevelModule.Run()
-            end
-        end)
-
-        pcall(function()
-            if FruitModule and type(FruitModule.Run) == "function" then
-                FruitModule.Run()
-            end
-        end)
-
-        pcall(function()
-            if ItemModule and type(ItemModule.Run) == "function" then
-                ItemModule.Run()
-            end
+            if AutoLevelModule and type(AutoLevelModule.Run) == "function" then AutoLevelModule.Run() end
+            if FruitModule and type(FruitModule.Run) == "function" then FruitModule.Run() end
+            if ItemModule and type(ItemModule.Run) == "function" then ItemModule.Run() end
         end)
     end
 }

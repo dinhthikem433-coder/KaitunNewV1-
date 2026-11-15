@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
 local function EquipBestWeapon()
@@ -62,56 +63,52 @@ end
 return {
     Init = function()
         task.spawn(InitializeFastAttack)
-        task.spawn(function()
-            while task.wait(0.02) do
-                pcall(function()
-                    EquipBestWeapon()
-                    local character = LocalPlayer.Character
-                    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-                    local humanoid = character and character:FindFirstChild("Humanoid")
-                    local enemies = Workspace:FindFirstChild("Enemies")
-                    if not rootPart or not humanoid or not enemies then return end
+        RunService.Heartbeat:Connect(function()
+            pcall(function()
+                EquipBestWeapon()
+                local character = LocalPlayer.Character
+                local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+                local humanoid = character and character:FindFirstChild("Humanoid")
+                local enemies = Workspace:FindFirstChild("Enemies")
+                if not rootPart or not humanoid or not enemies then return end
 
-                    local targetMob = GetNearestEnemy()
-                    if targetMob then
-                        local mRoot = targetMob:FindFirstChild("HumanoidRootPart")
-                        local mHum = targetMob:FindFirstChild("Humanoid")
-                        if mRoot and mHum then
-                            for _, mob in ipairs(enemies:GetChildren()) do
+                local targetMob = GetNearestEnemy()
+                if targetMob then
+                    local mRoot = targetMob:FindFirstChild("HumanoidRootPart")
+                    local mHum = targetMob:FindFirstChild("Humanoid")
+                    if mRoot and mHum then
+                        for _, mob in ipairs(enemies:GetChildren()) do
+                            if mob ~= targetMob then
                                 local oRoot = mob:FindFirstChild("HumanoidRootPart")
                                 local oHum = mob:FindFirstChild("Humanoid")
                                 if oRoot and oHum and oHum.Health > 0 then
-                                    local distToTarget = (oRoot.Position - mRoot.Position).Magnitude
-                                    if distToTarget <= 350 and distToTarget > 2 then
+                                    if (oRoot.Position - mRoot.Position).Magnitude > 4 then
                                         oRoot.CFrame = mRoot.CFrame
-                                        oRoot.Velocity = Vector3.new(0, 0, 0)
-                                        oHum.WalkSpeed = 0
-                                        oHum.JumpPower = 0
                                         oHum.PlatformStand = true
                                     end
                                 end
                             end
-                            humanoid.PlatformStand = false
-                            rootPart.CFrame = CFrame.new(mRoot.Position + Vector3.new(0, 4.2, 0), mRoot.Position)
-                            rootPart.Velocity = Vector3.new(0, 0, 0)
+                        end
+                        humanoid.PlatformStand = false
+                        rootPart.CFrame = CFrame.new(mRoot.Position + Vector3.new(0, 6.2, 0), mRoot.Position)
+                        rootPart.Velocity = Vector3.new(0, 0, 0)
+                    end
+                end
+
+                pcall(function()
+                    local combatFramework = ReplicatedStorage:FindFirstChild("CombatFramework")
+                    if combatFramework then
+                        local AC = debug.getupvalue(require(combatFramework), 2)
+                        if AC and AC.activeController then
+                            AC.activeController.timeToNextAttack = 0
+                            AC.activeController.hitboxMagnitude = 80
+                            AC.activeController.agitating = true
+                            AC.activeController.focusMob = targetMob
+                            AC.activeController:attack()
                         end
                     end
-
-                    pcall(function()
-                        local combatFramework = ReplicatedStorage:FindFirstChild("CombatFramework")
-                        if combatFramework then
-                            local AC = debug.getupvalue(require(combatFramework), 2)
-                            if AC and AC.activeController then
-                                AC.activeController.timeToNextAttack = 0
-                                AC.activeController.hitboxMagnitude = 65
-                                AC.activeController.agitating = true
-                                AC.activeController.focusMob = targetMob
-                                AC.activeController:attack()
-                            end
-                        end
-                    end)
                 end)
-            end
+            end)
         end)
     end
 }

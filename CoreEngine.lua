@@ -1,99 +1,48 @@
--- CoreEngine.lua
-local Players = game:GetService("Players")
-local TeleportService = game:GetService("TeleportService")
-local VirtualUser = game:GetService("VirtualUser")
-local LocalPlayer = Players.LocalPlayer
-
-local KaitunState = {
-    IsRaidRunning = false,
-    IsBusyWithCriticalTask = false,
-    CurrentTask = "Initializing"
-}
-
-local idledConnection
-if LocalPlayer then
-    idledConnection = LocalPlayer.Idled:Connect(function()
-        pcall(function()
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton2(Vector2.new(0, 0))
-        end)
-    end)
-end
-
-local function ServerHop()
-    pcall(function()
-        local httpService = game:GetService("HttpService")
-        local success, req = pcall(function()
-            return game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100")
-        end)
-        if not success or not req then return end
-        
-        local decodeSuccess, body = pcall(function()
-            return httpService:JSONDecode(req)
-        end)
-        if not decodeSuccess or not body or not body.data then return end
-
-        local servers = {}
-        for _, s in pairs(body.data) do
-            if type(s) == "table" and s.playing and s.maxPlayers and s.id then
-                if s.playing < s.maxPlayers and s.id ~= game.JobId then
-                    table.insert(servers, s.id)
-                end
-            end
-        end
-        
-        if #servers > 0 then
-            TeleportService:TeleportToPlaceInstance(game.PlaceId, servers[math.random(1, #servers)], LocalPlayer)
-        else
-            TeleportService:Teleport(game.PlaceId, LocalPlayer)
-        end
-    end)
-end
-
-local function StartMasterBrain(fruitModule, levelModule, itemModule)
-    task.spawn(function()
-        while true do
-            pcall(function()
-                if KaitunState.IsRaidRunning then
-                    KaitunState.CurrentTask = "Running Raid & Dungeons"
-                    task.wait(1)
-                    return
-                end
-
-                if fruitModule and type(fruitModule.CheckInventoryAndTriggerRaid) == "function" then
-                    pcall(function()
-                        fruitModule.CheckInventoryAndTriggerRaid(KaitunState)
-                    end)
-                end
-
-                if not KaitunState.IsBusyWithCriticalTask and itemModule then
-                    if type(itemModule.CheckLegendaryItemsAndQuests) == "function" then
-                        pcall(function()
-                            itemModule.CheckLegendaryItemsAndQuests(KaitunState)
-                        end)
-                    end
-                    if type(itemModule.FightingStyleProgression) == "function" then
-                        pcall(function()
-                            itemModule.FightingStyleProgression(KaitunState)
-                        end)
-                    end
-                end
-
-                if not KaitunState.IsBusyWithCriticalTask and levelModule then
-                    if type(levelModule.ExecuteLevelFarm) == "function" then
-                        pcall(function()
-                            levelModule.ExecuteLevelFarm(KaitunState)
-                        end)
-                    end
-                end
-            end)
-            task.wait(1)
-        end
-    end)
-end
+local P, R, T, S = game:GetService("Players"), game:GetService("ReplicatedStorage"), game:GetService("TweenService"), game:GetService("RunService")
+local L = P.LocalPlayer
+local C = R:WaitForChild("Remotes"):WaitForChild("CommF_", 999)
+local A = R:WaitForChild("Remotes"):WaitForChild("Validator", 10)
 
 return {
-    KaitunState = KaitunState,
-    ServerHop = ServerHop,
-    StartMasterBrain = StartMasterBrain
+    StartMasterBrain = function(F, Lvl, I)
+        task.spawn(function()
+            local tAtk = 0
+            local V = pcall(function() return game:GetService("VirtualInputManager") end) and game:GetService("VirtualInputManager") or nil
+            while task.wait(0.04) do
+                pcall(function()
+                    local ch = L.Character
+                    local bp = L.Backpack
+                    if not ch or not ch:FindFirstChild("HumanoidRootPart") then return end
+                    if bp and not ch:FindFirstChildOfClass("Tool") then
+                        for _, tp in pairs(bp:GetChildren()) do
+                            if tp:IsA("Tool") and (tp.ToolTip == "Melee" or tp.ToolTip == "Sword" or tp.ToolTip == "Blox Fruit") then
+                                ch.Humanoid:EquipTool(tp)
+                                break
+                            end
+                        end
+                    end
+                    local en = workspace:FindFirstChild("Enemies")
+                    if en then
+                        for _, e in pairs(en:GetChildren()) do
+                            local eh, hm = e:FindFirstChild("HumanoidRootPart"), e:FindFirstChild("Humanoid")
+                            if eh and hm and hm.Health > 0 and (ch.HumanoidRootPart.Position - eh.Position).Magnitude < 80 then
+                                if tick() - tAtk >= 0.06 then
+                                    tAtk = tick()
+                                    ch.HumanoidRootPart.CFrame = eh.CFrame * CFrame.new(0, 0, 3)
+                                    if V then
+                                        V:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                                        V:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+                                    end
+                                    if A then A:FireServer(eh.Position) end
+                                end
+                            end
+                        end
+                    end
+                end)
+            end
+        end)
+        pcall(function()
+            if Lvl and type(Lvl.Run) == "function" then Lvl.Run() end
+        end)
+    end
 }

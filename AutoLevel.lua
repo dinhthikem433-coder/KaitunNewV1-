@@ -1,224 +1,639 @@
-local P, R, W = game:GetService("Players"), game:GetService("ReplicatedStorage"), game:GetService("Workspace")
-local TP = game:GetService("TeleportService")
-local TS = game:GetService("TweenService")
-local L = P.LocalPlayer
-local C = R:WaitForChild("Remotes"):WaitForChild("CommF_", 999)
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
 
-local function SafeCall(...)
-    local success, err = pcall(C.InvokeServer, C, ...)
-    return success and err
-end
+local Engine = getgenv().CoreEngine or require(script.Parent:WaitForChild("CoreEngine"))
+Engine.Init()
 
-local function Hop()
-    pcall(function()
-        local s = game:GetService("HttpService"):JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"))
-        if s and s.data then
-            for _, v in ipairs(s.data) do
-                if type(v) == "table" and v.playing and v.maxPlayers and v.playing < v.maxPlayers and v.id ~= game.JobId then
-                    TP:TeleportToPlaceInstance(game.PlaceId, v.id, L)
-                    break
-                end
-            end
-        end
-    end)
-end
-
-local function GetChar()
-    return L.Character or L.CharacterAdded:Wait()
-end
-
-local function GetRoot(ch)
-    return ch:FindFirstChild("HumanoidRootPart") or ch:WaitForChild("HumanoidRootPart", 5)
-end
-
-local function SmartFly(targetCFrame)
-    local ch = GetChar()
-    local root = GetRoot(ch)
-    local hum = ch:FindFirstChild("Humanoid")
-    if not root or not hum then return end
-
-    local bv = root:FindFirstChild("KaitunFlightBV")
-    local bg = root:FindFirstChild("KaitunFlightBG")
-
-    if not bv then
-        bv = Instance.new("BodyVelocity")
-        bv.Name = "KaitunFlightBV"
-        bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-        bv.Velocity = Vector3.zero
-        bv.Parent = root
-    end
-
-    if not bg then
-        bg = Instance.new("BodyGyro")
-        bg.Name = "KaitunFlightBG"
-        bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-        bg.CFrame = root.CFrame
-        bg.Parent = root
-    end
-
-    hum.PlatformStand = true
-    local dist = (root.Position - targetCFrame.Position).Magnitude
-    local speed = 350
-    local timeDist = dist / speed
-
-    local info = TweenInfo.new(timeDist, Enum.EasingStyle.Linear)
-    local tween = TS:Create(root, info, {CFrame = targetCFrame})
-    tween:Play()
-end
-
-local function StopFly()
-    local ch = GetChar()
-    local root = ch:FindFirstChild("HumanoidRootPart")
-    local hum = ch:FindFirstChild("Humanoid")
-    if root then
-        local bv = root:FindFirstChild("KaitunFlightBV")
-        local bg = root:FindFirstChild("KaitunFlightBG")
-        if bv then bv:Destroy() end
-        if bg then bg:Destroy() end
-    end
-    if hum then hum.PlatformStand = false end
-end
-
-local function BringMobs(rootPos, mobName)
-    local enemies = W:FindFirstChild("Enemies")
-    if not enemies then return end
-    for _, mob in ipairs(enemies:GetChildren()) do
-        local mRoot = mob:FindFirstChild("HumanoidRootPart")
-        local mHum = mob:FindFirstChild("Humanoid")
-        if mRoot and mHum and mHum.Health > 0 and mob.Name == mobName then
-            if (mRoot.Position - rootPos).Magnitude <= 350 then
-                mRoot.CFrame = CFrame.new(rootPos + Vector3.new(0, 5, 0))
-                mHum.WalkSpeed = 0
-                mHum.JumpPower = 0
-                if mob:FindFirstChild("Head") then
-                    sethiddenproperty(L, "SimulationRadius", math.huge)
-                end
-            end
-        end
-    end
-end
-
-local QuestsList = {
-    {min = 1, max = 10, mob = "Bandit [Level 5]", questName = "BanditQuest1", levelIndex = 1, npcPos = CFrame.new(1061, 16, 1546)},
-    {min = 10, max = 15, mob = "Monkey [Level 14]", questName = "JungleQuest", levelIndex = 1, npcPos = CFrame.new(-1598, 36, 153)},
-    {min = 15, max = 30, mob = "Gorilla [Level 20]", questName = "JungleQuest", levelIndex = 2, npcPos = CFrame.new(-1598, 36, 153)},
-    {min = 30, max = 40, mob = "Pirate [Level 35]", questName = "BuggyQuest1", levelIndex = 1, npcPos = CFrame.new(-1140, 4, 3827)},
-    {min = 40, max = 60, mob = "Brute [Level 45]", questName = "BuggyQuest1", levelIndex = 2, npcPos = CFrame.new(-1140, 4, 3827)},
-    {min = 60, max = 75, mob = "Desert Bandit [Level 60]", questName = "DesertQuest", levelIndex = 1, npcPos = CFrame.new(895, 6, 4388)},
-    {min = 75, max = 90, mob = "Desert Officer [Level 70]", questName = "DesertQuest", levelIndex = 2, npcPos = CFrame.new(895, 6, 4388)},
-    {min = 90, max = 100, mob = "Snow Bandit [Level 90]", questName = "SnowQuest", levelIndex = 1, npcPos = CFrame.new(1389, 87, -1298)},
-    {min = 100, max = 120, mob = "Snowman [Level 100]", questName = "SnowQuest", levelIndex = 2, npcPos = CFrame.new(1389, 87, -1298)},
-    {min = 120, max = 150, mob = "Chief Petty Officer [Level 120]", questName = "MarineQuest2", levelIndex = 1, npcPos = CFrame.new(-5035, 27, 4325)},
-    {min = 150, max = 175, mob = "Sky Bandit [Level 150]", questName = "SkyQuest", levelIndex = 1, npcPos = CFrame.new(-4842, 717, -2623)},
-    {min = 175, max = 190, mob = "Dark Master [Level 175]", questName = "SkyQuest", levelIndex = 2, npcPos = CFrame.new(-4842, 717, -2623)},
-    {min = 190, max = 210, mob = "Prisoner [Level 190]", questName = "PrisonerQuest", levelIndex = 1, npcPos = CFrame.new(487, 47, 606)},
-    {min = 210, max = 250, mob = "Dangerous Prisoner [Level 220]", questName = "PrisonerQuest", levelIndex = 2, npcPos = CFrame.new(487, 47, 606)},
-    {min = 250, max = 275, mob = "Toga Warrior [Level 250]", questName = "ColosseumQuest", levelIndex = 1, npcPos = CFrame.new(-1579, 7, -2990)},
-    {min = 275, max = 300, mob = "Gladiator [Level 275]", questName = "ColosseumQuest", levelIndex = 2, npcPos = CFrame.new(-1579, 7, -2990)},
-    {min = 300, max = 325, mob = "Military Soldier [Level 300]", questName = "MagmaQuest", levelIndex = 1, npcPos = CFrame.new(-5315, 11, 8515)},
-    {min = 325, max = 375, mob = "Military Spy [Level 325]", questName = "MagmaQuest", levelIndex = 2, npcPos = CFrame.new(-5315, 11, 8515)},
-    {min = 375, max = 400, mob = "Fishman Warrior [Level 375]", questName = "FishmanQuest", levelIndex = 1, npcPos = CFrame.new(61122, 18, 1569)},
-    {min = 400, max = 450, mob = "Fishman Commando [Level 400]", questName = "FishmanQuest", levelIndex = 2, npcPos = CFrame.new(61122, 18, 1569)},
-    {min = 450, max = 475, mob = "God's Guard [Level 450]", questName = "SkyExp1Quest", levelIndex = 1, npcPos = CFrame.new(-7862, 5545, -380)},
-    {min = 475, max = 525, mob = "Shanda [Level 475]", questName = "SkyExp1Quest", levelIndex = 2, npcPos = CFrame.new(-7862, 5545, -380)},
-    {min = 525, max = 550, mob = "Wandas [Level 525]", questName = "SkyExp2Quest", levelIndex = 1, npcPos = CFrame.new(-7903, 5635, -1411)},
-    {min = 550, max = 625, mob = "Royal Squad [Level 550]", questName = "SkyExp2Quest", levelIndex = 2, npcPos = CFrame.new(-7903, 5635, -1411)},
-    {min = 625, max = 700, mob = "Galley Pirate [Level 625]", questName = "FountainQuest", levelIndex = 1, npcPos = CFrame.new(5259, 38, 4050)},
-    {min = 700, max = 725, mob = "Raider [Level 700]", questName = "Area1Quest", levelIndex = 1, npcPos = CFrame.new(-429, 72, 1836)},
-    {min = 725, max = 775, mob = "Mercenary [Level 725]", questName = "Area1Quest", levelIndex = 2, npcPos = CFrame.new(-429, 72, 1836)},
-    {min = 775, max = 800, mob = "Swan Pirate [Level 775]", questName = "Area2Quest", levelIndex = 1, npcPos = CFrame.new(633, 73, 918)},
-    {min = 800, max = 850, mob = "Factory Staff [Level 800]", questName = "Area2Quest", levelIndex = 2, npcPos = CFrame.new(633, 73, 918)},
-    {min = 850, max = 900, mob = "Marine Lieutenant [Level 850]", questName = "MarineQuest3", levelIndex = 1, npcPos = CFrame.new(-2442, 73, -3219)},
-    {min = 900, max = 950, mob = "Marine Captain [Level 900]", questName = "MarineQuest3", levelIndex = 2, npcPos = CFrame.new(-2442, 73, -3219)},
-    {min = 950, max = 1000, mob = "Zombie [Level 950]", questName = "ZombieQuest", levelIndex = 1, npcPos = CFrame.new(-5497, 48, -794)},
-    {min = 1000, max = 1050, mob = "Vampire [Level 1000]", questName = "ZombieQuest", levelIndex = 2, npcPos = CFrame.new(-5497, 48, -794)},
-    {min = 1050, max = 1100, mob = "Snow Trooper [Level 1050]", questName = "SnowMountainQuest", levelIndex = 1, npcPos = CFrame.new(604, 402, -5372)},
-    {min = 1100, max = 1175, mob = "Winter Warrior [Level 1100]", questName = "SnowMountainQuest", levelIndex = 2, npcPos = CFrame.new(604, 402, -5372)},
-    {min = 1175, max = 1250, mob = "Lab Subordinate [Level 1175]", questName = "IceSideQuest", levelIndex = 1, npcPos = CFrame.new(-6061, 16, -4907)},
-    {min = 1250, max = 1300, mob = "Horned Warrior [Level 1250]", questName = "IceSideQuest", levelIndex = 2, npcPos = CFrame.new(-6061, 16, -4907)},
-    {min = 1300, max = 1350, mob = "Magma Ninja [Level 1300]", questName = "FireSideQuest", levelIndex = 1, npcPos = CFrame.new(5435, 20, 6023)},
-    {min = 1350, max = 1425, mob = "Lava Pirate [Level 1350]", questName = "FireSideQuest", levelIndex = 2, npcPos = CFrame.new(5435, 20, 6023)},
-    {min = 1425, max = 1500, mob = "Ship Deckhand [Level 1425]", questName = "ShipQuest1", levelIndex = 1, npcPos = CFrame.new(1038, 125, 32910)},
-    {min = 1500, max = 1575, mob = "Pirate Millionaire [Level 1500]", questName = "PiratePortQuest", levelIndex = 1, npcPos = CFrame.new(-290, 43, 5581)},
-    {min = 1575, max = 1625, mob = "Pistol Billionaire [Level 1575]", questName = "PiratePortQuest", levelIndex = 2, npcPos = CFrame.new(-290, 43, 5581)},
-    {min = 1625, max = 1700, mob = "Dragon Crew Warrior [Level 1625]", questName = "AmazonQuest", levelIndex = 1, npcPos = CFrame.new(5833, 51, -1102)},
-    {min = 1700, max = 1750, mob = "Dragon Crew Archer [Level 1700]", questName = "AmazonQuest", levelIndex = 2, npcPos = CFrame.new(5833, 51, -1102)},
-    {min = 1750, max = 1800, mob = "Female Islander [Level 1750]", questName = "AmazonQuest2", levelIndex = 1, npcPos = CFrame.new(5451, 602, -756)},
-    {min = 1800, max = 1900, mob = "Giant Islander [Level 1800]", questName = "AmazonQuest2", levelIndex = 2, npcPos = CFrame.new(5451, 602, -756)},
-    {min = 1900, max = 1975, mob = "Marine Commodore [Level 1900]", questName = "MarineTreeIslandQuest", levelIndex = 1, npcPos = CFrame.new(2180, 28, -6740)},
-    {min = 1975, max = 2075, mob = "Marine Rear Admiral [Level 1975]", questName = "MarineTreeIslandQuest", levelIndex = 2, npcPos = CFrame.new(2180, 28, -6740)},
-    {min = 2075, max = 2125, mob = "Fishman Raider [Level 2075]", questName = "DeepForestIslandQuest", levelIndex = 1, npcPos = CFrame.new(-10582, 331, -8758)},
-    {min = 2125, max = 2200, mob = "Fishman Captain [Level 2125]", questName = "DeepForestIslandQuest", levelIndex = 2, npcPos = CFrame.new(-10582, 331, -8758)},
-    {min = 2200, max = 2250, mob = "Forest Pirate [Level 2200]", questName = "DeepForestIslandQuest2", levelIndex = 1, npcPos = CFrame.new(-13231, 332, -7628)},
-    {min = 2250, max = 2300, mob = "Mythological Pirate [Level 2250]", questName = "DeepForestIslandQuest2", levelIndex = 2, npcPos = CFrame.new(-13231, 332, -7628)},
-    {min = 2300, max = 2450, mob = "Reborn Skeleton [Level 2300]", questName = "HauntedCastleQuest", levelIndex = 1, npcPos = CFrame.new(-9515, 142, 5535)},
-    {min = 2450, max = 2600, mob = "Living Zombie [Level 2400]", questName = "HauntedCastleQuest", levelIndex = 2, npcPos = CFrame.new(-9515, 142, 5535)},
-    {min = 2600, max = 2700, mob = "Peanut Scout [Level 2600]", questName = "PeanutQuest", levelIndex = 1, npcPos = CFrame.new(-2104, 45, -10165)},
-    {min = 2700, max = 2800, mob = "Peanut President [Level 2700]", questName = "PeanutQuest", levelIndex = 2, npcPos = CFrame.new(-2104, 45, -10165)}
+local QuestData = {
+    [1] = {
+        LevelReq = 1,
+        QuestName = "BanditQuest1",
+        QuestId = 1,
+        NPC = "Bandit Quest Giver",
+        MobName = "Bandit",
+        MobSpawn = CFrame.new(1059, 16, 1373)
+    },
+    [10] = {
+        LevelReq = 10,
+        QuestName = "JungleQuest",
+        QuestId = 1,
+        NPC = "Jungle Quest Giver",
+        MobName = "Monkey",
+        MobSpawn = CFrame.new(-1601, 37, 153)
+    },
+    [15] = {
+        LevelReq = 15,
+        QuestName = "JungleQuest",
+        QuestId = 2,
+        NPC = "Jungle Quest Giver",
+        MobName = "Gorilla",
+        MobSpawn = CFrame.new(-1142, 10, 511)
+    },
+    [30] = {
+        LevelReq = 30,
+        QuestName = "BuggyQuest1",
+        QuestId = 1,
+        NPC = "Pirate Village Quest Giver",
+        MobName = "Pirate",
+        MobSpawn = CFrame.new(-1106, 14, 3817)
+    },
+    [40] = {
+        LevelReq = 40,
+        QuestName = "BuggyQuest1",
+        QuestId = 2,
+        NPC = "Pirate Village Quest Giver",
+        MobName = "Brute",
+        MobSpawn = CFrame.new(-1205, 18, 4278)
+    },
+    [60] = {
+        LevelReq = 60,
+        QuestName = "DesertQuest",
+        QuestId = 1,
+        NPC = "Desert Quest Giver",
+        MobName = "Desert Bandit",
+        MobSpawn = CFrame.new(903, 7, 4398)
+    },
+    [75] = {
+        LevelReq = 75,
+        QuestName = "DesertQuest",
+        QuestId = 2,
+        NPC = "Desert Quest Giver",
+        MobName = "Desert Officer",
+        MobSpawn = CFrame.new(1478, 11, 4383)
+    },
+    [90] = {
+        LevelReq = 90,
+        QuestName = "SnowQuest",
+        QuestId = 1,
+        NPC = "Snow Village Quest Giver",
+        MobName = "Snow Bandit",
+        MobSpawn = CFrame.new(1389, 87, -1300)
+    },
+    [100] = {
+        LevelReq = 100,
+        QuestName = "SnowQuest",
+        QuestId = 2,
+        NPC = "Snow Village Quest Giver",
+        MobName = "Snowman",
+        MobSpawn = CFrame.new(1257, 146, -1455)
+    },
+    [120] = {
+        LevelReq = 120,
+        QuestName = "MarineQuest",
+        QuestId = 1,
+        NPC = "Marine Outpost Quest Giver",
+        MobName = "Chief Petty Officer",
+        MobSpawn = CFrame.new(-4901, 23, 4137)
+    },
+    [150] = {
+        LevelReq = 150,
+        QuestName = "SkyQuest",
+        QuestId = 1,
+        NPC = "Sky Islands Quest Giver",
+        MobName = "Sky Bandit",
+        MobSpawn = CFrame.new(-4843, 718, -2622)
+    },
+    [175] = {
+        LevelReq = 175,
+        QuestName = "SkyQuest",
+        QuestId = 2,
+        NPC = "Sky Islands Quest Giver",
+        MobName = "Dark Master",
+        MobSpawn = CFrame.new(-5243, 388, -2275)
+    },
+    [190] = {
+        LevelReq = 190,
+        QuestName = "PrisonerQuest",
+        QuestId = 1,
+        NPC = "Prison Quest Giver",
+        MobName = "Prisoner",
+        MobSpawn = CFrame.new(511, 3, 474)
+    },
+    [210] = {
+        LevelReq = 210,
+        QuestName = "PrisonerQuest",
+        QuestId = 2,
+        NPC = "Prison Quest Giver",
+        MobName = "Dangerous Prisoner",
+        MobSpawn = CFrame.new(530, 3, 475)
+    },
+    [250] = {
+        LevelReq = 250,
+        QuestName = "ColosseumQuest",
+        QuestId = 1,
+        NPC = "Colosseum Quest Giver",
+        MobName = "Toga Warrior",
+        MobSpawn = CFrame.new(-1580, 7.3, -2975)
+    },
+    [275] = {
+        LevelReq = 275,
+        QuestName = "ColosseumQuest",
+        QuestId = 2,
+        NPC = "Colosseum Quest Giver",
+        MobName = "Gladiator",
+        MobSpawn = CFrame.new(-1432, 7.3, -3200)
+    },
+    [300] = {
+        LevelReq = 300,
+        QuestName = "MagmaQuest",
+        QuestId = 1,
+        NPC = "Magma Village Quest Giver",
+        MobName = "Military Soldier",
+        MobSpawn = CFrame.new(-5317, 12, 8515)
+    },
+    [325] = {
+        LevelReq = 325,
+        QuestName = "MagmaQuest",
+        QuestId = 2,
+        NPC = "Magma Village Quest Giver",
+        MobName = "Military Spy",
+        MobSpawn = CFrame.new(-5805, 51, 8821)
+    },
+    [375] = {
+        LevelReq = 375,
+        QuestName = "FishmanQuest",
+        QuestId = 1,
+        NPC = "Underwater City Quest Giver",
+        MobName = "Fishman Warrior",
+        MobSpawn = CFrame.new(6112, 18.5, 1555)
+    },
+    [400] = {
+        LevelReq = 400,
+        QuestName = "FishmanQuest",
+        QuestId = 2,
+        NPC = "Underwater City Quest Giver",
+        MobName = "Fishman Commando",
+        MobSpawn = CFrame.new(6186, 18.5, 2337)
+    },
+    [450] = {
+        LevelReq = 450,
+        QuestName = "FountainQuest",
+        QuestId = 1,
+        NPC = "Fountain City Quest Giver",
+        MobName = "Galley Pirate",
+        MobSpawn = CFrame.new(5259, 38, 4048)
+    },
+    [500] = {
+        LevelReq = 500,
+        QuestName = "FountainQuest",
+        QuestId = 2,
+        NPC = "Fountain City Quest Giver",
+        MobName = "Galley Captain",
+        MobSpawn = CFrame.new(5539, 38, 4894)
+    },
+    [700] = {
+        LevelReq = 700,
+        QuestName = "Area1Quest",
+        QuestId = 1,
+        NPC = "Docks Quest Giver",
+        MobName = "Raider",
+        MobSpawn = CFrame.new(-423, 73, 1836)
+    },
+    [725] = {
+        LevelReq = 725,
+        QuestName = "Area1Quest",
+        QuestId = 2,
+        NPC = "Docks Quest Giver",
+        MobName = "Mercenary",
+        MobSpawn = CFrame.new(-868, 142, 1346)
+    },
+    [750] = {
+        LevelReq = 750,
+        QuestName = "Area2Quest",
+        QuestId = 1,
+        NPC = "Green Zone Quest Giver",
+        MobName = "Swan Pirate",
+        MobSpawn = CFrame.new(662, 114, 1222)
+    },
+    [800] = {
+        LevelReq = 800,
+        QuestName = "Area2Quest",
+        QuestId = 2,
+        NPC = "Green Zone Quest Giver",
+        MobName = "Factory Staff",
+        MobSpawn = CFrame.new(506, 114, -282)
+    },
+    [850] = {
+        LevelReq = 850,
+        QuestName = "SnowMountainQuest",
+        QuestId = 1,
+        NPC = "Snow Mountain Quest Giver",
+        MobName = "Snow Warrior",
+        MobSpawn = CFrame.new(301, 401, -5555)
+    },
+    [875] = {
+        LevelReq = 875,
+        QuestName = "SnowMountainQuest",
+        QuestId = 2,
+        NPC = "Snow Mountain Quest Giver",
+        MobName = "Winter Warrior",
+        MobSpawn = CFrame.new(565, 401, -6155)
+    },
+    [900] = {
+        LevelReq = 900,
+        QuestName = "IceSideQuest",
+        QuestId = 1,
+        NPC = "Hot and Cold Quest Giver",
+        MobName = "Lab Subordinate",
+        MobSpawn = CFrame.new(-6016, 15, -4902)
+    },
+    [950] = {
+        LevelReq = 950,
+        QuestName = "IceSideQuest",
+        QuestId = 2,
+        NPC = "Hot and Cold Quest Giver",
+        MobName = "Horned Warrior",
+        MobSpawn = CFrame.new(-6322, 15, -5742)
+    },
+    [1000] = {
+        LevelReq = 1000,
+        QuestName = "FireSideQuest",
+        QuestId = 1,
+        NPC = "Hot and Cold Quest Giver",
+        MobName = "Magma Ninja",
+        MobSpawn = CFrame.new(-5405, 15, -5978)
+    },
+    [1050] = {
+        LevelReq = 1050,
+        QuestName = "FireSideQuest",
+        QuestId = 2,
+        NPC = "Hot and Cold Quest Giver",
+        MobName = "Lava Pirate",
+        MobSpawn = CFrame.new(-5197, 21, -4678)
+    },
+    [1100] = {
+        LevelReq = 1100,
+        QuestName = "ShipQuest1",
+        QuestId = 1,
+        NPC = "Cursed Ship Quest Giver",
+        MobName = "Ship Deckhand",
+        MobSpawn = CFrame.new(1022, 125, 32908)
+    },
+    [1125] = {
+        LevelReq = 1125,
+        QuestName = "ShipQuest1",
+        QuestId = 2,
+        NPC = "Cursed Ship Quest Giver",
+        MobName = "Ship Engineer",
+        MobSpawn = CFrame.new(921, 43, 32777)
+    },
+    [1175] = {
+        LevelReq = 1175,
+        QuestName = "ShipQuest2",
+        QuestId = 1,
+        NPC = "Cursed Ship Quest Giver",
+        MobName = "Ship Steward",
+        MobSpawn = CFrame.new(910, 131, 33333)
+    },
+    [1200] = {
+        LevelReq = 1200,
+        QuestName = "ShipQuest2",
+        QuestId = 2,
+        NPC = "Cursed Ship Quest Giver",
+        MobName = "Ship Officer",
+        MobSpawn = CFrame.new(1122, 131, 33333)
+    },
+    [1250] = {
+        LevelReq = 1250,
+        QuestName = "IceIslandQuest",
+        QuestId = 1,
+        NPC = "Ice Cream Island Quest Giver",
+        MobName = "Arctic Warrior",
+        MobSpawn = CFrame.new(6075, 49, -6155)
+    },
+    [1300] = {
+        LevelReq = 1300,
+        QuestName = "IceIslandQuest",
+        QuestId = 2,
+        NPC = "Ice Cream Island Quest Giver",
+        MobName = "Snow Lurker",
+        MobSpawn = CFrame.new(6322, 49, -5742)
+    },
+    [1350] = {
+        LevelReq = 1350,
+        QuestName = "FireIslandQuest",
+        QuestId = 1,
+        NPC = "Peanut Island Quest Giver",
+        MobName = "Peanut Scout",
+        MobSpawn = CFrame.new(-2015, 51, -12155)
+    },
+    [1400] = {
+        LevelReq = 1400,
+        QuestName = "FireIslandQuest",
+        QuestId = 2,
+        NPC = "Peanut Island Quest Giver",
+        MobName = "Peanut Präsident",
+        MobSpawn = CFrame.new(-2215, 51, -12355)
+    },
+    [1450] = {
+        LevelReq = 1450,
+        QuestName = "HauntedQuest1",
+        QuestId = 1,
+        NPC = "Haunted Castle Quest Giver",
+        MobName = "Reborn Skeleton",
+        MobSpawn = CFrame.new(-9479, 141, 5565)
+    },
+    [1500] = {
+        LevelReq = 1500,
+        QuestName = "HauntedQuest1",
+        QuestId = 2,
+        NPC = "Haunted Castle Quest Giver",
+        MobName = "Living Zombie",
+        MobSpawn = CFrame.new(-10144, 141, 6185)
+    },
+    [1525] = {
+        LevelReq = 1525,
+        QuestName = "HauntedQuest2",
+        QuestId = 1,
+        NPC = "Haunted Castle Quest Giver",
+        MobName = "Demonic Soul",
+        MobSpawn = CFrame.new(-9515, 172, 6078)
+    },
+    [1575] = {
+        LevelReq = 1575,
+        QuestName = "HauntedQuest2",
+        QuestId = 2,
+        NPC = "Haunted Castle Quest Giver",
+        MobName = "Posessed Mummy",
+        MobSpawn = CFrame.new(-9181, 172, 6122)
+    },
+    [1600] = {
+        LevelReq = 1600,
+        QuestName = "NutIslandQuest",
+        QuestId = 1,
+        NPC = "Nut Island Quest Giver",
+        MobName = "Cocoa Warrior",
+        MobSpawn = CFrame.new(-144, 23, -12745)
+    },
+    [1625] = {
+        LevelReq = 1625,
+        QuestName = "NutIslandQuest",
+        QuestId = 2,
+        NPC = "Nut Island Quest Giver",
+        MobName = "Chocolate Bar Battler",
+        MobSpawn = CFrame.new(234, 23, -12545)
+    },
+    [1700] = {
+        LevelReq = 1700,
+        QuestName = "MummyQuest",
+        QuestId = 1,
+        NPC = "Tiki Outpost Quest Giver",
+        MobName = "Sweet Thief",
+        MobSpawn = CFrame.new(-300, 23, -11945)
+    },
+    [1725] = {
+        LevelReq = 1725,
+        QuestName = "MummyQuest",
+        QuestId = 2,
+        NPC = "Tiki Outpost Quest Giver",
+        MobName = "Candy Rebel",
+        MobSpawn = CFrame.new(-500, 23, -12145)
+    },
+    [1750] = {
+        LevelReq = 1750,
+        QuestName = "Area1Quest3",
+        QuestId = 1,
+        NPC = "Sea of Treats Quest Giver",
+        MobName = "Candy Pirate",
+        MobSpawn = CFrame.new(-1200, 23, -14145)
+    },
+    [1800] = {
+        LevelReq = 1800,
+        QuestName = "Area1Quest3",
+        QuestId = 2,
+        NPC = "Sea of Treats Quest Giver",
+        MobName = "Snow Demon",
+        MobSpawn = CFrame.new(-1400, 23, -14345)
+    },
+    [1900] = {
+        LevelReq = 1900,
+        QuestName = "MarineTreeIsland",
+        QuestId = 1,
+        NPC = "Mythological Island Quest Giver",
+        MobName = "Pirate Millionaire",
+        MobSpawn = CFrame.new(-380, 77, 5555)
+    },
+    [1950] = {
+        LevelReq = 1950,
+        QuestName = "MarineTreeIsland",
+        QuestId = 2,
+        NPC = "Mythological Island Quest Giver",
+        MobName = "Pistol Corsair",
+        MobSpawn = CFrame.new(-580, 77, 5755)
+    },
+    [2000] = {
+        LevelReq = 2000,
+        QuestName = "JunglePirateQuest",
+        QuestId = 1,
+        NPC = "Floating Turtle Quest Giver",
+        MobName = "Forest Pirate",
+        MobSpawn = CFrame.new(-13200, 331, -7800)
+    },
+    [2050] = {
+        LevelReq = 2050,
+        QuestName = "JunglePirateQuest",
+        QuestId = 2,
+        NPC = "Floating Turtle Quest Giver",
+        MobName = "Mythological Pirate",
+        MobSpawn = CFrame.new(-13500, 483, -6900)
+    },
+    [2100] = {
+        LevelReq = 2100,
+        QuestName = "HydraQuest",
+        QuestId = 1,
+        NPC = "Hydra Island Quest Giver",
+        MobName = "Jungle Pirate",
+        MobSpawn = CFrame.new(-2200, 15, -10200)
+    },
+    [2125] = {
+        LevelReq = 2125,
+        QuestName = "HydraQuest",
+        QuestId = 2,
+        NPC = "Hydra Island Quest Giver",
+        MobName = "Musketeer Pirate",
+        MobSpawn = CFrame.new(-2000, 15, -10400)
+    },
+    [2200] = {
+        LevelReq = 2200,
+        QuestName = "GreatTreeQuest",
+        QuestId = 1,
+        NPC = "Great Tree Quest Giver",
+        MobName = "1",
+        MobSpawn = CFrame.new(2500, 16, -10500)
+    },
+    [2225] = {
+        LevelReq = 2225,
+        QuestName = "GreatTreeQuest",
+        QuestId = 2,
+        NPC = "Great Tree Quest Giver",
+        MobName = "2",
+        MobSpawn = CFrame.new(2700, 60, -10700)
+    },
+    [2300] = {
+        LevelReq = 2300,
+        QuestName = "CastleQuest",
+        QuestId = 1,
+        NPC = "Castle on the Sea Quest Giver",
+        MobName = "Marine Commodore",
+        MobSpawn = CFrame.new(-5000, 315, -3000)
+    },
+    [2350] = {
+        LevelReq = 2350,
+        QuestName = "CastleQuest",
+        QuestId = 2,
+        NPC = "Castle on the Sea Quest Giver",
+        MobName = "Marine Rear Admiral",
+        MobSpawn = CFrame.new(-5200, 315, -3200)
+    },
+    [2400] = {
+        LevelReq = 2400,
+        QuestName = "SeaKingQuest",
+        QuestId = 1,
+        NPC = "Tiki Outpost Quest Giver 2",
+        MobName = "Fishman Raider",
+        MobSpawn = CFrame.new(-16000, 15, -500)
+    },
+    [2450] = {
+        LevelReq = 2450,
+        QuestName = "SeaKingQuest",
+        QuestId = 2,
+        NPC = "Tiki Outpost Quest Giver 2",
+        MobName = "Sea Monster",
+        MobSpawn = CFrame.new(-16200, 15, -700)
+    },
+    [2500] = {
+        LevelReq = 2500,
+        QuestName = "TikiQuest1",
+        QuestId = 1,
+        NPC = "Tiki Outpost Quest Giver",
+        MobName = "Island Boy",
+        MobSpawn = CFrame.new(-18900, 15, -1000)
+    },
+    [2600] = {
+        LevelReq = 2600,
+        QuestName = "TikiQuest2",
+        QuestId = 1,
+        NPC = "Tiki Outpost Quest Giver",
+        MobName = "Sunken Sailor",
+        MobSpawn = CFrame.new(-19200, 15, -1300)
+    },
+    [2700] = {
+        LevelReq = 2700,
+        QuestName = "TikiQuest3",
+        QuestId = 1,
+        NPC = "Tiki Outpost Quest Giver",
+        MobName = "Tiki Shark",
+        MobSpawn = CFrame.new(-19500, 15, -1500)
+    },
+    [2800] = {
+        LevelReq = 2800,
+        QuestName = "TikiQuestMax",
+        QuestId = 1,
+        NPC = "Max Level Quest Giver",
+        MobName = "Ultimate Boss",
+        MobSpawn = CFrame.new(-20000, 20, -2000)
+    }
 }
 
-local function GetCurrentQuestData(lv)
-    for _, q in ipairs(QuestsList) do
-        if lv >= q.min and lv < q.max then
-            return q
+local function GetCurrentQuest()
+    local playerLevel = LocalPlayer.Data and LocalPlayer.Data.Level.Value or 1
+    local selectedQuest = nil
+    for level, data in pairs(QuestData) do
+        if playerLevel >= level then
+            if not selectedQuest or level > selectedQuest.LevelReq then
+                selectedQuest = data
+            end
         end
     end
-    return QuestsList[#QuestsList]
+    return selectedQuest
 end
 
-return {
-    Run = function()
-        task.spawn(function()
-            while task.wait(0.2) do
-                pcall(function()
-                    local ch = GetChar()
-                    local root = GetRoot(ch)
-                    if not root then return end
+local function GetNearestMob(mobName)
+    local enemies = Workspace:FindFirstChild("Enemies")
+    if not enemies then return nil end
+    
+    local nearest, shortest = nil, math.huge
+    local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not root then nil end
 
-                    if ch and not ch:FindFirstChild("Buso") then SafeCall("Buso") end
+    for _, mob in ipairs(enemies:GetChildren()) do
+        if mob.Name == mobName then
+            local hum = mob:FindFirstChild("Humanoid")
+        local mRoot = mob:FindFirstChild("HumanoidRootPart")
+            if hum and mRoot and hum.Health > 0 then
+                local dist = (mRoot.Position - root.Position).Magnitude
+                if dist < shortest then
+                    shortest = dist
+                    nearest = mRoot
+                end
+            end
+        end
+    end
+    return nearest
+end
 
-                    local dt = L:FindFirstChild("Data")
-                    local lv = dt and dt:FindFirstChild("Level") and dt.Level.Value or 1
+local function CheckAndHandleSeaTransition(playerLevel)
+    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+    if not remotes or not remotes:FindFirstChild("CommF_") then return end
 
-                    if lv > 2800 then
-                        Hop()
-                        return
+    if playerLevel >= 700 and game.PlaceId == 2753915549 then
+        Engine.SetTarget(CFrame.new(-380.2, 77.2, 183.5), "TransitToSea2")
+        local detective = Workspace:FindFirstChild("NPC") and Workspace.NPC:FindFirstChild("Detective")
+        if detective and (LocalPlayer.Character.HumanoidRootPart.Position - detective.HumanoidRootPart.Position).Magnitude < 15 then
+            remotes.CommF_:InvokeServer("DressrosaQuest")
+            task.wait(1)
+        end
+        return true
+    elseif playerLevel >= 1500 and game.PlaceId == 4442272183 then
+        Engine.SetTarget(CFrame.new(-65.4, 16.2, 1824.1), "TransitToSea3")
+        local king = Workspace:FindFirstChild("NPC") and Workspace.NPC:FindFirstChild("King Red Head")
+        if king and (LocalPlayer.Character.HumanoidRootPart.Position - king.HumanoidRootPart.Position).Magnitude < 15 then
+            remotes.CommF_:InvokeServer("ThirdSea")
+            task.wait(1)
+        end
+        return true
+    end
+    return false
+end
+
+task.spawn(function()
+    while task.wait(0.5) do
+        pcall(function()
+            local character = LocalPlayer.Character
+            if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+
+            local playerLevel = LocalPlayer.Data and LocalPlayer.Data.Level.Value or 1
+
+            if CheckAndHandleSeaTransition(playerLevel) then
+                return
+            end
+
+            local currentQuest = GetCurrentQuest()
+            if not currentQuest then return end
+
+            local questFolder = LocalPlayer.PlayerGui:FindFirstChild("Quest")
+            local hasActiveQuest = questFolder and questFolder.Enabled and questFolder.Main.QuestTitle.Text:find(currentQuest.MobName)
+
+            if not hasActiveQuest then
+                Engine.SetTarget(currentQuest.MobSpawn, "GettingQuest")
+                local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+                if remotes and remotes:FindFirstChild("CommF_") then
+                    local distToNPC = (character.HumanoidRootPart.Position - currentQuest.MobSpawn.Position).Magnitude
+                    if distToNPC < 20 then
+                        remotes.CommF_:InvokeServer("StartQuest", currentQuest.QuestName, currentQuest.QuestId)
+                        task.wait(1)
                     end
-
-                    local qData = GetCurrentQuestData(lv)
-                    local activeQuest = dt and dt:FindFirstChild("Quest") and dt.Quest.Value ~= ""
-
-                    if not activeQuest then
-                        StopFly()
-                        if (root.Position - qData.npcPos.Position).Magnitude > 15 then
-                            SmartFly(qData.npcPos)
-                        else
-                            SafeCall("SetSpawnPoint")
-                            SafeCall("StartQuest", qData.questName, qData.levelIndex)
-                        end
-                    else
-                        local targetMobPos = nil
-                        local enemies = W:FindFirstChild("Enemies")
-                        if enemies then
-                            for _, mob in ipairs(enemies:GetChildren()) do
-                                local mRoot = mob:FindFirstChild("HumanoidRootPart")
-                                local mHum = mob:FindFirstChild("Humanoid")
-                                if mRoot and mHum and mHum.Health > 0 and mob.Name == qData.mob then
-                                    targetMobPos = mRoot.Position
-                                    break
-                                end
-                            end
-                        end
-
-                        if targetMobPos then
-                            BringMobs(targetMobPos, qData.mob)
-                            SmartFly(CFrame.new(targetMobPos + Vector3.new(0, 25, 0)))
-                        else
-                            SmartFly(qData.npcPos)
-                        end
-                    end
-                end)
+                end
+            else
+                local targetMobRoot = GetNearestMob(currentQuest.MobName)
+                if targetMobRoot then
+                    Engine.SetTarget(targetMobRoot.CFrame + Vector3.new(0, 5, 0), "FarmMob")
+                else
+                    Engine.SetTarget(currentQuest.MobSpawn, "WaitingMob")
+                end
             end
         end)
     end
-}
+end)

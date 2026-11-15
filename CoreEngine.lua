@@ -6,6 +6,42 @@ local TweenService = game:GetService("TweenService")
 local VirtualUser = game:GetService("VirtualUser")
 local LocalPlayer = Players.LocalPlayer
 
+local Remotes = ReplicatedStorage:WaitForChild("Remotes", 5)
+local CommF = Remotes and Remotes:FindFirstChild("CommF_")
+
+local function GetQuestData()
+    pcall(function()
+        if not CommF then return end
+        local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+        local mainUI = playerGui and playerGui:FindFirstChild("Main")
+        local questFrame = mainUI and mainUI:FindFirstChild("Quest")
+        if questFrame and questFrame.Visible then
+            local container = questFrame:FindFirstChild("Container")
+            local titleBox = container and container:FindFirstChild("QuestTitle")
+            if titleBox then
+                return titleBox.Text
+            end
+        end
+    end)
+    return nil
+end
+
+local function AutoQuest()
+    pcall(function()
+        if not CommF then return end
+        local level = LocalPlayer.Data and LocalPlayer.Data.Level and LocalPlayer.Data.Level.Value or 1
+        local currentQuest = GetQuestData()
+        
+        if not currentQuest or currentQuest == "" then
+            if level >= 1 and level <= 9 then
+                CommF:InvokeServer("StartQuest", "BanditQuest1", 1)
+            elseif level >= 10 and level == 14 then
+                CommF:InvokeServer("StartQuest", "JungleQuest", 1)
+            end
+        end
+    end)
+end
+
 local function EquipBestWeapon()
     pcall(function()
         local character = LocalPlayer.Character
@@ -69,6 +105,13 @@ return {
     Init = function()
         task.spawn(InitializeFastAttack)
         
+        task.spawn(function()
+            while true do
+                task.spawn(AutoQuest)
+                task.wait(2)
+            end
+        end)
+        
         LocalPlayer.Idled:Connect(function()
             VirtualUser:CaptureController()
             VirtualUser:ClickButton2(Vector2.new(0,0))
@@ -122,6 +165,8 @@ return {
                             rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
                         end
                     end
+                else
+                    targetMob = nil
                 end
 
                 pcall(function()
@@ -134,7 +179,9 @@ return {
                             AC.activeController.hitboxMagnitude = 150
                             AC.activeController.isEquipped = true
                             AC.activeController.focusMob = targetMob
-                            AC.activeController:attack()
+                            if targetMob then
+                                AC.activeController:attack()
+                            end
                         end
                     end
                 end)

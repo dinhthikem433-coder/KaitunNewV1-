@@ -1,5 +1,7 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local StarterGui = game:GetService("StarterGui")
 local LocalPlayer = Players.LocalPlayer
 
@@ -22,6 +24,56 @@ return {
             ScreenGui.ResetOnSpawn = false
             ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
+            local LoadScreen = Instance.new("Frame", ScreenGui)
+            LoadScreen.Size = UDim2.new(1, 0, 1, 0)
+            LoadScreen.BackgroundColor3 = Color3.fromRGB(10, 10, 15)
+            LoadScreen.ZIndex = 10
+
+            local LoadText = Instance.new("TextLabel", LoadScreen)
+            LoadText.Size = UDim2.new(0, 400, 0, 80)
+            LoadText.AnchorPoint = Vector2.new(0.5, 0.5)
+            LoadText.Position = UDim2.new(0.5, 0, 0.45, 0)
+            LoadText.BackgroundTransparency = 1
+            LoadText.Text = "THANHHUB KAITUN LOADING... 0%"
+            LoadText.TextColor3 = Color3.fromRGB(255, 255, 255)
+            LoadText.TextScaled = true
+            LoadText.Font = Enum.Font.FredokaOne
+            LoadText.ZIndex = 11
+
+            local LoadBarBg = Instance.new("Frame", LoadScreen)
+            LoadBarBg.Size = UDim2.new(0, 400, 0, 16)
+            LoadBarBg.AnchorPoint = Vector2.new(0.5, 0.5)
+            LoadBarBg.Position = UDim2.new(0.5, 0, 0.55, 0)
+            LoadBarBg.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
+            LoadBarBg.BorderSizePixel = 0
+            LoadBarBg.ZIndex = 11
+
+            local LoadBarCorner = Instance.new("UICorner", LoadBarBg)
+            LoadBarCorner.CornerRadius = UDim.new(1, 0)
+
+            local LoadBarFill = Instance.new("Frame", LoadBarBg)
+            LoadBarFill.Size = UDim2.new(0, 0, 1, 0)
+            LoadBarFill.BackgroundColor3 = Color3.fromRGB(0, 255, 128)
+            LoadBarFill.BorderSizePixel = 0
+            LoadBarFill.ZIndex = 12
+
+            local FillCorner = Instance.new("UICorner", LoadBarFill)
+            FillCorner.CornerRadius = UDim.new(1, 0)
+
+            task.spawn(function()
+                for i = 1, 100 do
+                    LoadText.Text = "THANHHUB KAITUN LOADING... " .. i .. "%"
+                    LoadBarFill.Size = UDim2.new(i / 100, 0, 1, 0)
+                    task.wait(0.02)
+                end
+                TweenService:Create(LoadScreen, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
+                TweenService:Create(LoadText, TweenInfo.new(0.5), {TextTransparency = 1}):Play()
+                TweenService:Create(LoadBarBg, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
+                TweenService:Create(LoadBarFill, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
+                task.wait(0.5)
+                LoadScreen:Destroy()
+            end)
+
             local MainFrame = Instance.new("Frame", ScreenGui)
             MainFrame.Size = UDim2.new(0, 380, 0, 210)
             MainFrame.Position = UDim2.new(0.03, 0, 0.1, 0)
@@ -34,6 +86,33 @@ return {
 
             local UIStroke = Instance.new("UIStroke", MainFrame)
             UIStroke.Thickness = 3.5
+
+            local dragging, dragInput, dragStart, startPos
+            MainFrame.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    dragging = true
+                    dragStart = input.Position
+                    startPos = MainFrame.Position
+                    input.Changed:Connect(function()
+                        if input.UserInputState == Enum.UserInputState.End then
+                            dragging = false
+                        end
+                    end)
+                end
+            end)
+
+            UserInputService.InputChanged:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+                    dragInput = input
+                end
+            end)
+
+            RunService.RenderStepped:Connect(function()
+                if dragging and dragInput then
+                    local delta = dragInput.Position - dragStart
+                    MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+                end
+            end)
 
             local BgGradient = Instance.new("Frame", MainFrame)
             BgGradient.Size = UDim2.new(1, 0, 1, 0)
@@ -48,35 +127,6 @@ return {
                 ColorSequenceKeypoint.new(1, Color3.fromRGB(50, 10, 10))
             })
             UIGrad.Rotation = 45
-
-            local ParticleHolder = Instance.new("Frame", MainFrame)
-            ParticleHolder.Size = UDim2.new(1, 0, 1, 0)
-            ParticleHolder.BackgroundTransparency = 1
-            ParticleHolder.ZIndex = 2
-
-            for i = 1, 15 do
-                local spark = Instance.new("Frame", ParticleHolder)
-                spark.Size = UDim2.new(0, math.random(4, 8), 0, math.random(4, 8))
-                spark.Position = UDim2.new(math.random(), 0, 1, 0)
-                spark.BackgroundColor3 = Color3.fromRGB(255, math.random(150, 255), 0)
-                spark.BorderSizePixel = 0
-                local sCorner = Instance.new("UICorner", spark)
-                sCorner.CornerRadius = UDim.new(1, 0)
-
-                task.spawn(function()
-                    while true do
-                        local randomX = math.random()
-                        spark.Position = UDim2.new(randomX, 0, 1.1, 0)
-                        local tweenTime = math.random(15, 25) / 10
-                        TweenService:Create(spark, TweenInfo.new(tweenTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-                            Position = UDim2.new(randomX + (math.random(-20, 20)/100), 0, -0.2, 0),
-                            BackgroundTransparency = 1
-                        }):Play()
-                        task.wait(tweenTime)
-                        spark.BackgroundTransparency = 0
-                    end
-                end)
-            end
 
             local Title = Instance.new("TextLabel", MainFrame)
             Title.Size = UDim2.new(1, -20, 0, 40)
@@ -103,7 +153,7 @@ return {
             Status.Position = UDim2.new(0, 12, 0, 85)
             Status.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
             Status.BackgroundTransparency = 0.3
-            Status.Text = "⚡ STATUS: BRING MOBS & FAST ATTACK ACTIVE"
+            Status.Text = "⚡ STATUS: FAST ATTACK ACTIVE"
             Status.TextColor3 = Color3.fromRGB(0, 255, 128)
             Status.TextScaled = true
             Status.Font = Enum.Font.GothamBold
@@ -145,22 +195,39 @@ return {
             Footer.Size = UDim2.new(1, 0, 0, 25)
             Footer.Position = UDim2.new(0, 0, 0, 165)
             Footer.BackgroundTransparency = 1
-            Footer.Text = "✨ SCRIPT BY THÀNH 2K13 - MAX 2800 ✨"
+            Footer.Text = "✨ THÀNH 2K13 | FPS: -- | Ping: --ms ✨"
             Footer.TextColor3 = Color3.fromRGB(255, 255, 255)
             Footer.TextScaled = true
             Footer.Font = Enum.Font.GothamSemibold
             Footer.ZIndex = 3
 
+            local lastUpdate = 0
+            local frameCount = 0
+            local currentFPS = 60
+
+            RunService.RenderStepped:Connect(function(dt)
+                frameCount = frameCount + 1
+                if tick() - lastUpdate >= 1 then
+                    currentFPS = math.floor(frameCount / (tick() - lastUpdate))
+                    frameCount = 0
+                    lastUpdate = tick()
+                end
+            end)
+
             task.spawn(function()
                 local tickTime = 0
-                while task.wait(0.04) do
-                    tickTime = tickTime + 0.04
+                while task.wait(0.5) do
+                    tickTime = tickTime + 0.5
                     local hue = tickTime % 5 / 5
                     local rainbowColor = Color3.fromHSV(hue, 1, 1)
                     
                     UIStroke.Color = rainbowColor
                     Title.TextColor3 = rainbowColor
                     SubTitle.TextColor3 = Color3.fromHSV((hue + 0.3) % 1, 1, 1)
+                    
+                    local ping = math.floor(LocalPlayer:GetNetworkPing() * 1000)
+                    local timeStr = os.date("%H:%M:%S")
+                    Footer.Text = string.format("✨ THÀNH 2K13 | FPS: %d | Ping: %dms | %s ✨", currentFPS, ping, timeStr)
                     Footer.TextColor3 = Color3.fromHSV((hue + 0.6) % 1, 1, 1)
                     BarGrad.Rotation = (tickTime * 60) % 360
                 end

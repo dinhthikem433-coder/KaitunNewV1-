@@ -90,7 +90,7 @@ return {
                                 end
                             end
                             humanoid.PlatformStand = false
-                            rootPart.CFrame = mRoot.CFrame + Vector3.new(0, 7.5, 0)
+                            rootPart.CFrame = CFrame.new(mRoot.Position + Vector3.new(0, 4.5, 0), mRoot.Position)
                             rootPart.Velocity = Vector3.new(0, 0, 0)
                         end
                     end

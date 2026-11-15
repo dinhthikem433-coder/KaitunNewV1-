@@ -1,12 +1,10 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
-local LevelFarm    = loadstring(game:HttpGet("https://raw.githubusercontent.com/dinhthikem433-coder/KaitunNewV1-/main/AutoLevel.lua"))()
-local ItemQuests   = loadstring(game:HttpGet("https://raw.githubusercontent.com/dinhthikem433-coder/KaitunNewV1-/main/ItemQuests.lua"))()
-local RaidManager  = loadstring(game:HttpGet("https://raw.githubusercontent.com/dinhthikem433-coder/KaitunNewV1-/main/RaidManager.lua"))()
-
+-- FastAttack chuẩn chỉnh theo cấu trúc script lớn (Hook CombatFramework ActiveController)
 local function InitializeFastAttack()
     pcall(function()
         local CombatFramework = require(ReplicatedStorage:WaitForChild("CombatFramework"))
@@ -15,9 +13,8 @@ local function InitializeFastAttack()
             for _, v in pairs(debug.getupvalues(CombatFrameworkR.attack)) do
                 if type(v) == "table" and rawget(v, "CHIT") then
                     local oldHit = v.CHIT
-                    v.CHIT = function(...)
-                        local success, err = pcall(oldHit, ...)
-                        return success and err
+                    v.CHIT = function(self, ...)
+                        return oldHit(self, ...)
                     end
                 end
             end
@@ -25,7 +22,29 @@ local function InitializeFastAttack()
     end)
 end
 
-local function ProcessCombat()
+local function GetNearestEnemy()
+    local enemies = Workspace:FindFirstChild("Enemies")
+    if not enemies then return nil end
+    local character = LocalPlayer.Character
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return nil end
+
+    local nearest, minDist = nil, math.huge
+    for _, mob in ipairs(enemies:GetChildren()) do
+        local mRoot = mob:FindFirstChild("HumanoidRootPart")
+        local mHum = mob:FindFirstChild("Humanoid")
+        if mRoot and mHum and mHum.Health > 0 then
+            local dist = (mRoot.Position - rootPart.Position).Magnitude
+            if dist < minDist then
+                minDist = dist
+                nearest = mob
+            end
+        end
+    end
+    return nearest
+end
+
+local function ProcessCombatAndMovement()
     pcall(function()
         local character = LocalPlayer.Character
         local rootPart = character and character:FindFirstChild("HumanoidRootPart")
@@ -33,20 +52,12 @@ local function ProcessCombat()
         local enemies = Workspace:FindFirstChild("Enemies")
         if not rootPart or not humanoid or not enemies then return end
 
-        local targetMob = nil
-        for _, mob in ipairs(enemies:GetChildren()) do
-            local mRoot = mob:FindFirstChild("HumanoidRootPart")
-            local mHum = mob:FindFirstChild("Humanoid")
-            if mRoot and mHum and mHum.Health > 0 then
-                targetMob = mob
-                break
-            end
-        end
-
+        local targetMob = GetNearestEnemy()
         if targetMob then
             local mRoot = targetMob:FindFirstChild("HumanoidRootPart")
             local mHum = targetMob:FindFirstChild("Humanoid")
             if mRoot and mHum then
+                -- Bring Mobs: Gom tất cả quái trong bán kính 350 studs đè bẹp vào vị trí quái mục tiêu, khóa cứng chân quái
                 for _, mob in ipairs(enemies:GetChildren()) do
                     local otherRoot = mob:FindFirstChild("HumanoidRootPart")
                     local otherHum = mob:FindFirstChild("Humanoid")
@@ -55,21 +66,23 @@ local function ProcessCombat()
                             otherRoot.CFrame = mRoot.CFrame
                             otherHum.WalkSpeed = 0
                             otherHum.JumpPower = 0
+                            otherHum.PlatformStand = true
                         end
                     end
                 end
 
-                humanoid.PlatformStand = true
-                rootPart.CFrame = mRoot.CFrame + Vector3.new(0, 25, 0)
-                rootPart.Velocity = Vector3.new(0, -20, 0)
-                sethiddenproperty(LocalPlayer, "SimulationRadius", math.huge)
+                -- Bay lơ lửng sát đầu chuẩn xác (Sửa lỗi đứng cơ, giữ chân cẳng linh hoạt không bị đơ)
+                humanoid.PlatformStand = false -- Giữ trạng thái linh hoạt, không bị cứng khớp chân
+                rootPart.CFrame = mRoot.CFrame + Vector3.new(0, 6, 0)
+                rootPart.Velocity = Vector3.new(0, 0, 0)
+                pcall(function() sethiddenproperty(LocalPlayer, "SimulationRadius", math.huge) end)
             end
-        else
-            humanoid.PlatformStand = false
         end
 
+        -- Gọi FastAttack hệ thống ngầm liên tục không giới hạn tốc độ
         pcall(function()
-            local AC = debug.getupvalue(require(ReplicatedStorage.CombatFramework), 2)
+            local CombatFramework = require(ReplicatedStorage:WaitForChild("CombatFramework"))
+            local AC = debug.getupvalue(CombatFramework, 2)
             if AC and AC.activeController then
                 AC.activeController.timeToNextAttack = 0
                 AC.activeController.agitating = true
@@ -80,64 +93,12 @@ local function ProcessCombat()
     end)
 end
 
-local function HasSpareFruitForRaid()
-    local bp = LocalPlayer.Backpack
-    local ch = LocalPlayer.Character
-    local inventory = {}
-    
-    if bp then
-        for _, item in ipairs(bp:GetChildren()) do
-            if item:IsA("Tool") and (item.Name:match("Fruit") or item:FindFirstChild("Fruit")) then
-                table.insert(inventory, item.Name)
-            end
-        end
-    end
-    
-    if ch then
-        for _, item in ipairs(ch:GetChildren()) do
-            if item:IsA("Tool") and (item.Name:match("Fruit") or item:FindFirstChild("Fruit")) then
-                table.insert(inventory, item.Name)
-            end
-        end
-    end
-
-    for _, name in ipairs(inventory) do
-        if not (name:find("Leopard") or name:find("Dragon") or name:find("Kitsune") or name:find("Spirit") or name:find("Control") or name:find("Venom") or name:find("Shadow") or name:find("Dough") or name:find("T-Rex") or name:find("Mammoth") or name:find("Yeti") or name:find("Gas") or name:find("Portal") or name:find("Rumble")) then
-            return true
-        end
-    end
-    return false
-end
-
 return {
     Init = function()
         task.spawn(InitializeFastAttack)
-
         task.spawn(function()
-            while task.wait(0.2) do
-                pcall(function()
-                    ProcessCombat()
-                    
-                    local dt = LocalPlayer:FindFirstChild("Data")
-                    local lv = dt and dt:FindFirstChild("Level") and dt.Level.Value or 1
-
-                    if lv >= 1100 and HasSpareFruitForRaid() then
-                        pcall(function() RaidManager.Run() end)
-                        return
-                    end
-
-                    LevelFarm.RunOnce = LevelFarm.RunOnce or (function()
-                        task.spawn(function() LevelFarm.Run() end)
-                        return true
-                    end)()
-
-                    if lv >= 1500 and lv <= 2800 then
-                        ItemQuests.RunOnce = ItemQuests.RunOnce or (function()
-                            task.spawn(function() ItemQuests.Run() end)
-                            return true
-                        end)()
-                    end
-                end)
+            while task.wait(0.1) do
+                ProcessCombatAndMovement()
             end
         end)
     end

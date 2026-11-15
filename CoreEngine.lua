@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
 local function EquipBestWeapon()
@@ -26,13 +27,16 @@ end
 
 local function InitializeFastAttack()
     pcall(function()
-        local CF = require(ReplicatedStorage:WaitForChild("CombatFramework"))
-        local CFR = rawget(CF, "activeController")
-        if CFR then
-            for _, v in pairs(debug.getupvalues(CFR.attack)) do
-                if type(v) == "table" and rawget(v, "CHIT") then
-                    local oldHit = v.CHIT
-                    v.CHIT = function(self, ...) return oldHit(self, ...) end
+        local combatFramework = ReplicatedStorage:WaitForChild("CombatFramework", 5)
+        if combatFramework then
+            local CF = require(combatFramework)
+            local CFR = rawget(CF, "activeController")
+            if CFR and CFR.attack then
+                for _, v in pairs(debug.getupvalues(CFR.attack)) do
+                    if type(v) == "table" and rawget(v, "CHIT") then
+                        local oldHit = v.CHIT
+                        v.CHIT = function(self, ...) return oldHit(self, ...) end
+                    end
                 end
             end
         end
@@ -60,7 +64,7 @@ return {
     Init = function()
         task.spawn(InitializeFastAttack)
         task.spawn(function()
-            while task.wait(0.02) do
+            while task.wait(0.1) do
                 pcall(function()
                     EquipBestWeapon()
                     local character = LocalPlayer.Character
@@ -87,20 +91,21 @@ return {
                                 end
                             end
                             humanoid.PlatformStand = false
-                            rootPart.CFrame = rootPart.CFrame:Lerp(mRoot.CFrame + Vector3.new(0, 5.5, 0), 0.5)
+                            rootPart.CFrame = mRoot.CFrame + Vector3.new(0, 5.5, 0)
                             rootPart.Velocity = Vector3.new(0, 0, 0)
-                            pcall(function() sethiddenproperty(LocalPlayer, "SimulationRadius", math.huge) end)
                         end
                     end
 
                     pcall(function()
-                        local CombatFramework = require(ReplicatedStorage:WaitForChild("CombatFramework"))
-                        local AC = debug.getupvalue(CombatFramework, 2)
-                        if AC and AC.activeController then
-                            AC.activeController.timeToNextAttack = 0
-                            AC.activeController.agitating = true
-                            AC.activeController.focusMob = targetMob
-                            AC.activeController:attack()
+                        local combatFramework = ReplicatedStorage:FindFirstChild("CombatFramework")
+                        if combatFramework then
+                            local AC = debug.getupvalue(require(combatFramework), 2)
+                            if AC and AC.activeController then
+                                AC.activeController.timeToNextAttack = 0
+                                AC.activeController.agitating = true
+                                AC.activeController.focusMob = targetMob
+                                AC.activeController:attack()
+                            end
                         end
                     end)
                 end)

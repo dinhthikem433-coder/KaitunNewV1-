@@ -541,9 +541,7 @@ local function GetPlayerLevel()
     local success, level = pcall(function()
         return LocalPlayer.Data.Level.Value
     end)
-    if success and level then
-        return level
-    end
+    if success and level then return level end
     return 1
 end
 
@@ -610,10 +608,11 @@ task.spawn(function()
             local commF = remotes and remotes:FindFirstChild("CommF_")
 
             if not hasActiveQuest then
-                Engine.SetTarget(currentQuest.MobSpawn, "GettingQuest")
+                Engine.SetTarget(currentQuest.MobSpawn + Vector3.new(0, 3, 0), "GettingQuest")
                 if commF then
                     local distToNPC = (character.HumanoidRootPart.Position - currentQuest.MobSpawn.Position).Magnitude
-                    if distToNPC < 25 then
+                    if distToNPC < 15 then
+                        -- Tương tác chính xác với remote nhận quest của Blox Fruits
                         commF:InvokeServer("StartQuest", currentQuest.QuestName, currentQuest.QuestId)
                         task.wait(1)
                     end

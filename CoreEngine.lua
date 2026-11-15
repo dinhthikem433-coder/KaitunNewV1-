@@ -2,6 +2,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 local VirtualUser = game:GetService("VirtualUser")
 local LocalPlayer = Players.LocalPlayer
 
@@ -36,7 +37,9 @@ local function InitializeFastAttack()
                 for _, v in pairs(debug.getupvalues(CFR.attack)) do
                     if type(v) == "table" and rawget(v, "CHIT") then
                         local oldHit = v.CHIT
-                        v.CHIT = function(self, ...) return oldHit(self, ...) end
+                        v.CHIT = function(self, ...)
+                            return oldHit(self, ...)
+                        end
                     end
                 end
             end
@@ -44,18 +47,16 @@ local function InitializeFastAttack()
     end)
 end
 
-local function GetNearestEnemy()
+local function GetNearestEnemy(rootPos)
     local enemies = Workspace:FindFirstChild("Enemies")
     if not enemies then return nil end
-    local rootPart = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not rootPart then return nil end
     local nearest, minDist = nil, math.huge
     for _, mob in ipairs(enemies:GetChildren()) do
         local mRoot = mob:FindFirstChild("HumanoidRootPart")
         local mHum = mob:FindFirstChild("Humanoid")
         if mRoot and mHum and mHum.Health > 0 then
-            local dist = (mRoot.Position - rootPart.Position).Magnitude
-            if dist < minDist and dist <= 150 then
+            local dist = (mRoot.Position - rootPos).Magnitude
+            if dist < minDist and dist <= 350 then
                 minDist = dist
                 nearest = mob
             end
@@ -82,44 +83,56 @@ return {
                 local enemies = Workspace:FindFirstChild("Enemies")
                 if not rootPart or not humanoid or not enemies then return end
 
-                local targetMob = GetNearestEnemy()
+                local targetMob = GetNearestEnemy(rootPart.Position)
                 if targetMob then
                     local mRoot = targetMob:FindFirstChild("HumanoidRootPart")
                     local mHum = targetMob:FindFirstChild("Humanoid")
                     if mRoot and mHum and mHum.Health > 0 then
                         for _, mob in ipairs(enemies:GetChildren()) do
-                            if mob ~= targetMob then
-                                local oRoot = mob:FindFirstChild("HumanoidRootPart")
-                                local oHum = mob:FindFirstChild("Humanoid")
-                                if oRoot and oHum and oHum.Health > 0 then
-                                    local distToPlayer = (oRoot.Position - rootPart.Position).Magnitude
-                                    if distToPlayer <= 50 then
-                                        local distToTarget = (oRoot.Position - mRoot.Position).Magnitude
-                                        if distToTarget > 3 then
-                                            oRoot.CFrame = mRoot.CFrame
-                                            oHum.PlatformStand = true
-                                        end
+                            local oRoot = mob:FindFirstChild("HumanoidRootPart")
+                            local oHum = mob:FindFirstChild("Humanoid")
+                            if oRoot and oHum and oHum.Health > 0 then
+                                local distToPlayer = (oRoot.Position - rootPart.Position).Magnitude
+                                if distToPlayer <= 100 then
+                                    oRoot.CFrame = mRoot.CFrame
+                                    oRoot.Anchored = true
+                                    oHum.PlatformStand = true
+                                    local imm = oRoot:FindFirstChild("BodyVelocity") or oRoot:FindFirstChild("LinearVelocity")
+                                    if not imm then
+                                        local bv = Instance.new("BodyVelocity")
+                                        bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+                                        bv.Velocity = Vector3.new(0, 0, 0)
+                                        bv.Parent = oRoot
                                     end
                                 end
                             end
                         end
-                        humanoid.PlatformStand = false
                         
-                        local targetPos = mRoot.Position + Vector3.new(0, 6.5, 0)
-                        local diff = targetPos - rootPart.Position
-                        rootPart.AssemblyLinearVelocity = Vector3.new(diff.X * 20, math.clamp(diff.Y * 20, -50, 50), diff.Z * 20)
-                        rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                        humanoid.PlatformStand = false
+                        local targetCFrame = mRoot.CFrame * CFrame.new(0, 6.5, 0)
+                        local distanceToTarget = (rootPart.Position - targetCFrame.Position).Magnitude
+                        
+                        if distanceToTarget > 6 then
+                            local info = TweenInfo.new(distanceToTarget / 350, Enum.EasingStyle.Linear)
+                            local tween = TweenService:Create(rootPart, info, {CFrame = targetCFrame})
+                            tween:Play()
+                        else
+                            rootPart.CFrame = targetCFrame
+                            rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                            rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                        end
                     end
                 end
 
                 pcall(function()
                     local combatFramework = ReplicatedStorage:FindFirstChild("CombatFramework")
                     if combatFramework then
-                        local AC = debug.getupvalue(require(combatFramework), 2)
+                        local CFModule = require(combatFramework)
+                        local AC = debug.getupvalue(CFModule, 2)
                         if AC and AC.activeController then
                             AC.activeController.timeToNextAttack = 0
-                            AC.activeController.hitboxMagnitude = 90
-                            AC.activeController.agitating = true
+                            AC.activeController.hitboxMagnitude = 150
+                            AC.activeController.isEquipped = true
                             AC.activeController.focusMob = targetMob
                             AC.activeController:attack()
                         end

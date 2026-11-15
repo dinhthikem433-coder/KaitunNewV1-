@@ -537,8 +537,18 @@ local QuestData = {
     }
 }
 
+local function GetPlayerLevel()
+    local success, level = pcall(function()
+        return LocalPlayer.Data.Level.Value
+    end)
+    if success and level then
+        return level
+    end
+    return 1
+end
+
 local function GetCurrentQuest()
-    local playerLevel = LocalPlayer.Data and LocalPlayer.Data.Level.Value or 1
+    local playerLevel = GetPlayerLevel()
     local selectedQuest = nil
     for level, data in pairs(QuestData) do
         if playerLevel >= level then
@@ -556,12 +566,12 @@ local function GetNearestMob(mobName)
     
     local nearest, shortest = nil, math.huge
     local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not root then nil end
+    if not root then return nil end
 
     for _, mob in ipairs(enemies:GetChildren()) do
         if mob.Name == mobName then
             local hum = mob:FindFirstChild("Humanoid")
-        local mRoot = mob:FindFirstChild("HumanoidRootPart")
+            local mRoot = mob:FindFirstChild("HumanoidRootPart")
             if hum and mRoot and hum.Health > 0 then
                 local dist = (mRoot.Position - root.Position).Magnitude
                 if dist < shortest then
@@ -574,55 +584,37 @@ local function GetNearestMob(mobName)
     return nearest
 end
 
-local function CheckAndHandleSeaTransition(playerLevel)
-    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-    if not remotes or not remotes:FindFirstChild("CommF_") then return end
-
-    if playerLevel >= 700 and game.PlaceId == 2753915549 then
-        Engine.SetTarget(CFrame.new(-380.2, 77.2, 183.5), "TransitToSea2")
-        local detective = Workspace:FindFirstChild("NPC") and Workspace.NPC:FindFirstChild("Detective")
-        if detective and (LocalPlayer.Character.HumanoidRootPart.Position - detective.HumanoidRootPart.Position).Magnitude < 15 then
-            remotes.CommF_:InvokeServer("DressrosaQuest")
-            task.wait(1)
-        end
-        return true
-    elseif playerLevel >= 1500 and game.PlaceId == 4442272183 then
-        Engine.SetTarget(CFrame.new(-65.4, 16.2, 1824.1), "TransitToSea3")
-        local king = Workspace:FindFirstChild("NPC") and Workspace.NPC:FindFirstChild("King Red Head")
-        if king and (LocalPlayer.Character.HumanoidRootPart.Position - king.HumanoidRootPart.Position).Magnitude < 15 then
-            remotes.CommF_:InvokeServer("ThirdSea")
-            task.wait(1)
-        end
-        return true
-    end
-    return false
-end
-
 task.spawn(function()
     while task.wait(0.5) do
         pcall(function()
             local character = LocalPlayer.Character
             if not character or not character:FindFirstChild("HumanoidRootPart") then return end
 
-            local playerLevel = LocalPlayer.Data and LocalPlayer.Data.Level.Value or 1
-
-            if CheckAndHandleSeaTransition(playerLevel) then
-                return
-            end
-
             local currentQuest = GetCurrentQuest()
             if not currentQuest then return end
 
-            local questFolder = LocalPlayer.PlayerGui:FindFirstChild("Quest")
-            local hasActiveQuest = questFolder and questFolder.Enabled and questFolder.Main.QuestTitle.Text:find(currentQuest.MobName)
+            local hasActiveQuest = false
+            local pGui = LocalPlayer:FindFirstChild("PlayerGui")
+            if pGui then
+                local qGui = pGui:FindFirstChild("Quest")
+                if qGui and qGui.Enabled then
+                    local mainFrame = qGui:FindFirstChild("Main")
+                    local titleLabel = mainFrame and mainFrame:FindFirstChild("QuestTitle")
+                    if titleLabel and titleLabel.Text:find(currentQuest.MobName) then
+                        hasActiveQuest = true
+                    end
+                end
+            end
+
+            local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+            local commF = remotes and remotes:FindFirstChild("CommF_")
 
             if not hasActiveQuest then
                 Engine.SetTarget(currentQuest.MobSpawn, "GettingQuest")
-                local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-                if remotes and remotes:FindFirstChild("CommF_") then
+                if commF then
                     local distToNPC = (character.HumanoidRootPart.Position - currentQuest.MobSpawn.Position).Magnitude
-                    if distToNPC < 20 then
-                        remotes.CommF_:InvokeServer("StartQuest", currentQuest.QuestName, currentQuest.QuestId)
+                    if distToNPC < 25 then
+                        commF:InvokeServer("StartQuest", currentQuest.QuestName, currentQuest.QuestId)
                         task.wait(1)
                     end
                 end

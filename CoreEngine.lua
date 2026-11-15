@@ -1,7 +1,6 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
 local function EquipBestWeapon()
@@ -64,7 +63,7 @@ return {
     Init = function()
         task.spawn(InitializeFastAttack)
         task.spawn(function()
-            while task.wait(0.1) do
+            while task.wait(0.02) do
                 pcall(function()
                     EquipBestWeapon()
                     local character = LocalPlayer.Character
@@ -91,7 +90,7 @@ return {
                                 end
                             end
                             humanoid.PlatformStand = false
-                            rootPart.CFrame = mRoot.CFrame + Vector3.new(0, 5.5, 0)
+                            rootPart.CFrame = mRoot.CFrame + Vector3.new(0, 7.5, 0)
                             rootPart.Velocity = Vector3.new(0, 0, 0)
                         end
                     end
@@ -102,6 +101,7 @@ return {
                             local AC = debug.getupvalue(require(combatFramework), 2)
                             if AC and AC.activeController then
                                 AC.activeController.timeToNextAttack = 0
+                                AC.activeController.hitboxMagnitude = 60
                                 AC.activeController.agitating = true
                                 AC.activeController.focusMob = targetMob
                                 AC.activeController:attack()

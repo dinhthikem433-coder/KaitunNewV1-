@@ -23,7 +23,6 @@ local currentTween = nil
 local lastHitTick = 0
 local HIT_COOLDOWN = 0.05
 
--- [02] FastAttack Framework & Server Damage Hook
 local function InitializeFastAttack()
     pcall(function()
         local combatFramework = ReplicatedStorage:WaitForChild("CombatFramework", 5)
@@ -35,6 +34,9 @@ local function InitializeFastAttack()
                     if type(v) == "table" and rawget(v, "CHIT") then
                         local oldHit = v.CHIT
                         v.CHIT = function(self, ...)
+                            if not Engine.Config.FastAttackEnabled then
+                                return oldHit(self, unpack({...}))
+                            end
                             local hits = {...}
                             local currentTime = tick()
                             if RegisterHit and #hits > 0 and (currentTime - lastHitTick >= HIT_COOLDOWN) then
@@ -56,7 +58,6 @@ local function InitializeFastAttack()
     end)
 end
 
--- [03] Auto Equipment Handler
 local function EquipBestWeapon()
     pcall(function()
         local character = LocalPlayer.Character
@@ -73,7 +74,6 @@ local function EquipBestWeapon()
     end)
 end
 
--- [04] High-Performance Movement (Tween Anti-Cheat Bypass) & Bring Mob
 local function ProcessMovementAndBring()
     pcall(function()
         local character = LocalPlayer.Character
@@ -112,18 +112,31 @@ local function ProcessMovementAndBring()
         end
 
         if Engine.Config.BringMobEnabled and enemies and rootPart then
-            local primaryTarget = enemies:FindFirstChildOfClass("Model")
+            local primaryTarget = nil
+            for _, mob in ipairs(enemies:GetChildren()) do
+                local mHum = mob:FindFirstChild("Humanoid")
+                local mRoot = mob:FindFirstChild("HumanoidRootPart")
+                if mHum and mRoot and mHum.Health > 0 then
+                    if (mRoot.Position - rootPart.Position).Magnitude <= Engine.Config.BringRange then
+                        primaryTarget = mob
+                        break
+                    end
+                end
+            end
+
             local pRoot = primaryTarget and primaryTarget:FindFirstChild("HumanoidRootPart")
             if pRoot then
                 for _, mob in ipairs(enemies:GetChildren()) do
-                    local mRoot = mob:FindFirstChild("HumanoidRootPart")
-                    local mHum = mob:FindFirstChild("Humanoid")
-                    if mRoot and mHum and mHum.Health > 0 then
-                        local dist = (mRoot.Position - rootPart.Position).Magnitude
-                        if dist <= Engine.Config.BringRange and mob ~= primaryTarget then
-                            mRoot.CFrame = pRoot.CFrame
-                            mRoot.Anchored = true
-                            mHum.PlatformStand = true
+                    if mob ~= primaryTarget then
+                        local mRoot = mob:FindFirstChild("HumanoidRootPart")
+                        local mHum = mob:FindFirstChild("Humanoid")
+                        if mRoot and mHum and mHum.Health > 0 then
+                            local dist = (mRoot.Position - rootPart.Position).Magnitude
+                            if dist <= Engine.Config.BringRange then
+                                mRoot.CFrame = pRoot.CFrame
+                                mRoot.Anchored = true
+                                mHum.PlatformStand = true
+                            end
                         end
                     end
                 end
@@ -132,7 +145,6 @@ local function ProcessMovementAndBring()
     end)
 end
 
--- [05] FastAttack Execution Routine
 local function ProcessCombat()
     pcall(function()
         if not Engine.Config.FastAttackEnabled then return end
@@ -155,7 +167,6 @@ local function ProcessCombat()
     end)
 end
 
--- [06] External Control API for Task Controllers
 function Engine.SetTarget(cframe, taskName)
     Engine.Config.TargetCFrame = cframe
     Engine.Config.ActiveTask = taskName or "Custom"
@@ -170,7 +181,6 @@ function Engine.ClearTarget()
     Engine.Config.ActiveTask = "None"
 end
 
--- [07] Engine Startup & Main Loop
 function Engine.Init()
     task.spawn(InitializeFastAttack)
     

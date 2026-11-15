@@ -81,8 +81,10 @@ return {
                                 local oRoot = mob:FindFirstChild("HumanoidRootPart")
                                 local oHum = mob:FindFirstChild("Humanoid")
                                 if oRoot and oHum and oHum.Health > 0 then
-                                    if (oRoot.Position - mRoot.Position).Magnitude <= 350 then
+                                    local distToTarget = (oRoot.Position - mRoot.Position).Magnitude
+                                    if distToTarget <= 350 and distToTarget > 2 then
                                         oRoot.CFrame = mRoot.CFrame
+                                        oRoot.Velocity = Vector3.new(0, 0, 0)
                                         oHum.WalkSpeed = 0
                                         oHum.JumpPower = 0
                                         oHum.PlatformStand = true
@@ -90,7 +92,7 @@ return {
                                 end
                             end
                             humanoid.PlatformStand = false
-                            rootPart.CFrame = CFrame.new(mRoot.Position + Vector3.new(0, 4.5, 0), mRoot.Position)
+                            rootPart.CFrame = CFrame.new(mRoot.Position + Vector3.new(0, 4.2, 0), mRoot.Position)
                             rootPart.Velocity = Vector3.new(0, 0, 0)
                         end
                     end
@@ -101,7 +103,7 @@ return {
                             local AC = debug.getupvalue(require(combatFramework), 2)
                             if AC and AC.activeController then
                                 AC.activeController.timeToNextAttack = 0
-                                AC.activeController.hitboxMagnitude = 60
+                                AC.activeController.hitboxMagnitude = 65
                                 AC.activeController.agitating = true
                                 AC.activeController.focusMob = targetMob
                                 AC.activeController:attack()

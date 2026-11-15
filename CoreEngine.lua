@@ -3,6 +3,27 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
 
+local function EquipBestWeapon()
+    pcall(function()
+        local character = LocalPlayer.Character
+        local backpack = LocalPlayer.Backpack
+        if not character or not backpack then return end
+        if not character:FindFirstChildOfClass("Tool") then
+            for _, tool in ipairs(backpack:GetChildren()) do
+                if tool:IsA("Tool") and (tool.ToolTip == "Melee" or tool.ToolTip == "Sword" or tool.ToolTip == "Blox Fruit" or tool.ToolTip == "Gun") then
+                    local humanoid = character:FindFirstChildOfClass("Humanoid")
+                    if humanoid then humanoid:EquipTool(tool) break end
+                end
+            end
+            if not character:FindFirstChildOfClass("Tool") then
+                local anyTool = backpack:FindFirstChildOfClass("Tool")
+                local humanoid = character:FindFirstChildOfClass("Humanoid")
+                if anyTool and humanoid then humanoid:EquipTool(anyTool) end
+            end
+        end
+    end)
+end
+
 local function InitializeFastAttack()
     pcall(function()
         local CF = require(ReplicatedStorage:WaitForChild("CombatFramework"))
@@ -35,53 +56,55 @@ local function GetNearestEnemy()
     return nearest
 end
 
-local function ProcessCombatAndMovement()
-    pcall(function()
-        local character = LocalPlayer.Character
-        local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-        local humanoid = character and character:FindFirstChild("Humanoid")
-        local enemies = Workspace:FindFirstChild("Enemies")
-        if not rootPart or not humanoid or not enemies then return end
-        local targetMob = GetNearestEnemy()
-        if targetMob then
-            local mRoot = targetMob:FindFirstChild("HumanoidRootPart")
-            local mHum = targetMob:FindFirstChild("Humanoid")
-            if mRoot and mHum then
-                for _, mob in ipairs(enemies:GetChildren()) do
-                    local oRoot = mob:FindFirstChild("HumanoidRootPart")
-                    local oHum = mob:FindFirstChild("Humanoid")
-                    if oRoot and oHum and oHum.Health > 0 then
-                        if (oRoot.Position - mRoot.Position).Magnitude <= 350 then
-                            oRoot.CFrame = mRoot.CFrame
-                            oHum.WalkSpeed = 0
-                            oHum.JumpPower = 0
-                            oHum.PlatformStand = true
-                        end
-                    end
-                end
-                humanoid.PlatformStand = false
-                rootPart.CFrame = mRoot.CFrame + Vector3.new(0, 6, 0)
-                rootPart.Velocity = Vector3.new(0, 0, 0)
-                pcall(function() sethiddenproperty(LocalPlayer, "SimulationRadius", math.huge) end)
-            end
-        end
-        pcall(function()
-            local AC = debug.getupvalue(require(ReplicatedStorage.CombatFramework), 2)
-            if AC and AC.activeController then
-                AC.activeController.timeToNextAttack = 0
-                AC.activeController.agitating = true
-                AC.activeController.focusMob = nil
-                AC.activeController:attack()
-            end
-        end)
-    end)
-end
-
 return {
     Init = function()
         task.spawn(InitializeFastAttack)
         task.spawn(function()
-            while task.wait(0.1) do ProcessCombatAndMovement() end
+            while task.wait(0.02) do
+                pcall(function()
+                    EquipBestWeapon()
+                    local character = LocalPlayer.Character
+                    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+                    local humanoid = character and character:FindFirstChild("Humanoid")
+                    local enemies = Workspace:FindFirstChild("Enemies")
+                    if not rootPart or not humanoid or not enemies then return end
+
+                    local targetMob = GetNearestEnemy()
+                    if targetMob then
+                        local mRoot = targetMob:FindFirstChild("HumanoidRootPart")
+                        local mHum = targetMob:FindFirstChild("Humanoid")
+                        if mRoot and mHum then
+                            for _, mob in ipairs(enemies:GetChildren()) do
+                                local oRoot = mob:FindFirstChild("HumanoidRootPart")
+                                local oHum = mob:FindFirstChild("Humanoid")
+                                if oRoot and oHum and oHum.Health > 0 then
+                                    if (oRoot.Position - mRoot.Position).Magnitude <= 350 then
+                                        oRoot.CFrame = mRoot.CFrame
+                                        oHum.WalkSpeed = 0
+                                        oHum.JumpPower = 0
+                                        oHum.PlatformStand = true
+                                    end
+                                end
+                            end
+                            humanoid.PlatformStand = false
+                            rootPart.CFrame = rootPart.CFrame:Lerp(mRoot.CFrame + Vector3.new(0, 5.5, 0), 0.5)
+                            rootPart.Velocity = Vector3.new(0, 0, 0)
+                            pcall(function() sethiddenproperty(LocalPlayer, "SimulationRadius", math.huge) end)
+                        end
+                    end
+
+                    pcall(function()
+                        local CombatFramework = require(ReplicatedStorage:WaitForChild("CombatFramework"))
+                        local AC = debug.getupvalue(CombatFramework, 2)
+                        if AC and AC.activeController then
+                            AC.activeController.timeToNextAttack = 0
+                            AC.activeController.agitating = true
+                            AC.activeController.focusMob = targetMob
+                            AC.activeController:attack()
+                        end
+                    end)
+                end)
+            end
         end)
     end
 }

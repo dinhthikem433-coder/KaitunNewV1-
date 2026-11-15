@@ -2,14 +2,24 @@ local P, R, T = game:GetService("Players"), game:GetService("ReplicatedStorage")
 local L = P.LocalPlayer
 local C = R:WaitForChild("Remotes"):WaitForChild("CommF_", 999)
 
-local function ST(cf)
+local function GlideTo(targetCf)
     pcall(function()
-        local hrp = L.Character and L.Character:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            local d = (hrp.Position - cf.Position).Magnitude
-            if d < 25 then hrp.CFrame = cf return end
-            T:Create(hrp, TweenInfo.new(d / 320, Enum.EasingStyle.Linear), {CFrame = cf}):Play()
-            task.wait(d / 320)
+        local char = L.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local hum = char and char:FindFirstChild("Humanoid")
+        if hrp and hum then
+            hum.PlatformStand = true
+            local distance = (hrp.Position - targetCf.Position).Magnitude
+            if distance < 15 then 
+                hrp.CFrame = targetCf 
+                hum.PlatformStand = false
+                return 
+            end
+            local speed = 320
+            local tween = T:Create(hrp, TweenInfo.new(distance / speed, Enum.EasingStyle.Linear), {CFrame = targetCf + Vector3.new(0, 5, 0)})
+            tween:Play()
+            task.wait(distance / speed)
+            hum.PlatformStand = false
         end
     end)
 end
@@ -76,11 +86,11 @@ return {
                 pcall(function()
                     local dt = L:FindFirstChild("Data") or L:FindFirstChild("leaderstats")
                     local lv = dt and dt:FindFirstChild("Level") and dt.Level.Value or 1
-                    if lv == 700 then ST(CFrame.new(-380, 23, 1883)) C:InvokeServer("TravelDressrosa") return end
-                    if lv == 1500 then ST(CFrame.new(-606, 15, 1352)) C:InvokeServer("TravelZou") return end
+                    if lv == 700 then GlideTo(CFrame.new(-380, 23, 1883)) C:InvokeServer("TravelDressrosa") return end
+                    if lv == 1500 then GlideTo(CFrame.new(-606, 15, 1352)) C:InvokeServer("TravelZou") return end
                     for _, z in ipairs(Z) do
                         if lv >= z.Min and lv < z.Max then
-                            ST(z.CF)
+                            GlideTo(z.CF)
                             local qg = L.PlayerGui:FindFirstChild("Main")
                             qg = qg and qg:FindFirstChild("Quest")
                             if (not qg or not qg.Visible) and (tick() - lQ > 2) then

@@ -8,6 +8,7 @@ local LocalPlayer = Players.LocalPlayer
 
 local Remotes = ReplicatedStorage:WaitForChild("Remotes", 5)
 local CommF = Remotes and Remotes:FindFirstChild("CommF_")
+local RegisterHit = Remotes and Remotes:FindFirstChild("RegisterHit")
 
 local function GetQuestData()
     pcall(function()
@@ -35,7 +36,7 @@ local function AutoQuest()
         if not currentQuest or currentQuest == "" then
             if level >= 1 and level <= 9 then
                 CommF:InvokeServer("StartQuest", "BanditQuest1", 1)
-            elseif level >= 10 and level == 14 then
+            elseif level >= 10 and level <= 14 then
                 CommF:InvokeServer("StartQuest", "JungleQuest", 1)
             end
         end
@@ -63,6 +64,7 @@ local function EquipBestWeapon()
     end)
 end
 
+-- Hook FastAttack chuẩn xác giúp quái nhận damage thực tế từ Server
 local function InitializeFastAttack()
     pcall(function()
         local combatFramework = ReplicatedStorage:WaitForChild("CombatFramework", 5)
@@ -74,7 +76,13 @@ local function InitializeFastAttack()
                     if type(v) == "table" and rawget(v, "CHIT") then
                         local oldHit = v.CHIT
                         v.CHIT = function(self, ...)
-                            return oldHit(self, ...)
+                            local hits = {...}
+                            if RegisterHit and #hits > 0 then
+                                pcall(function()
+                                    RegisterHit:FireServer(hits[1], hits[2])
+                                end)
+                            end
+                            return oldHit(self, unpack(hits))
                         end
                     end
                 end
@@ -131,22 +139,16 @@ return {
                     local mRoot = targetMob:FindFirstChild("HumanoidRootPart")
                     local mHum = targetMob:FindFirstChild("Humanoid")
                     if mRoot and mHum and mHum.Health > 0 then
+                        -- Gom quái mượt mà, khóa cố định tránh bay nhảy lung tung
                         for _, mob in ipairs(enemies:GetChildren()) do
                             local oRoot = mob:FindFirstChild("HumanoidRootPart")
                             local oHum = mob:FindFirstChild("Humanoid")
-                            if oRoot and oHum and oHum.Health > 0 then
+                            if oRoot and oHum and oHum.Health > 0 and mob ~= targetMob then
                                 local distToPlayer = (oRoot.Position - rootPart.Position).Magnitude
-                                if distToPlayer <= 100 then
+                                if distToPlayer <= 120 then
                                     oRoot.CFrame = mRoot.CFrame
                                     oRoot.Anchored = true
                                     oHum.PlatformStand = true
-                                    local imm = oRoot:FindFirstChild("BodyVelocity") or oRoot:FindFirstChild("LinearVelocity")
-                                    if not imm then
-                                        local bv = Instance.new("BodyVelocity")
-                                        bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-                                        bv.Velocity = Vector3.new(0, 0, 0)
-                                        bv.Parent = oRoot
-                                    end
                                 end
                             end
                         end
@@ -155,8 +157,9 @@ return {
                         local targetCFrame = mRoot.CFrame * CFrame.new(0, 6.5, 0)
                         local distanceToTarget = (rootPart.Position - targetCFrame.Position).Magnitude
                         
+                        -- Di chuyển mượt bằng Tween tốc độ cao, đến nơi khóa cứng không giật
                         if distanceToTarget > 6 then
-                            local info = TweenInfo.new(distanceToTarget / 350, Enum.EasingStyle.Linear)
+                            local info = TweenInfo.new(distanceToTarget / 400, Enum.EasingStyle.Linear)
                             local tween = TweenService:Create(rootPart, info, {CFrame = targetCFrame})
                             tween:Play()
                         else
@@ -169,6 +172,7 @@ return {
                     targetMob = nil
                 end
 
+                -- Ép tốc độ đánh cực đại (Fast Attack siêu nhanh không delay)
                 pcall(function()
                     local combatFramework = ReplicatedStorage:FindFirstChild("CombatFramework")
                     if combatFramework then
@@ -176,11 +180,18 @@ return {
                         local AC = debug.getupvalue(CFModule, 2)
                         if AC and AC.activeController then
                             AC.activeController.timeToNextAttack = 0
-                            AC.activeController.hitboxMagnitude = 150
+                            AC.activeController.hitboxMagnitude = 180
                             AC.activeController.isEquipped = true
                             AC.activeController.focusMob = targetMob
                             if targetMob then
                                 AC.activeController:attack()
+                                -- Kích hoạt thêm nhịp đúp để đẩy tốc độ lên 3-4 phát/giây
+                                local weaponController = AC.activeController
+                                if weaponController.master and weaponController.master.attack then
+                                    pcall(function()
+                                        weaponController:attack()
+                                    end)
+                                end
                             end
                         end
                     end
